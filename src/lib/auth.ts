@@ -17,6 +17,7 @@ export async function getCurrentUser() {
 export async function requireUser(role?: Role) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (role && user.role !== role) throw new Error(`Only a ${role} can do this.`);
+  // The wrong role is sent home, and / routes each role to its own start page.
+  if (role && user.role !== role) redirect("/");
   return user;
 }
