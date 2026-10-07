@@ -1,3 +1,4 @@
+import { DEMO_PAGE_PATH } from "@/check/demo-page";
 import type { DraftContent } from "@/check/types";
 import { type ads, channelEnum, productEnum, sourceEnum } from "@/db/schema";
 
@@ -38,9 +39,6 @@ export function toDraftContent(ad: Pick<AdRow, "channel" | "draftSubject" | "dra
     ? { kind: "url", url: ad.draftUrl ?? "" }
     : { kind: "text", subject: ad.draftSubject, text: ad.draftText ?? "" };
 }
-
-// Demo affiliate pages are stored as a path; fetchContent renders them in-process instead of fetching over the network.
-const DEMO_PAGE_PATH = /^\/demo\/[^/\s?#]+$/;
 
 function isOneOf<T extends string>(values: readonly T[], value: string): value is T {
   return (values as readonly string[]).includes(value);

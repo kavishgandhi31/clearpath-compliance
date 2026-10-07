@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
-import { eventLabels } from "@/lib/labels";
+import { alertColorLabels, eventLabels } from "@/lib/labels";
 
 type Event = {
   id: number;
@@ -22,6 +22,15 @@ type Details = {
   note?: string;
   version?: number;
   comment?: string | null;
+  scanId?: number;
+  result?: "matched" | "changed" | "failed";
+  matchedVersion?: number | null;
+  failureReason?: string;
+  alertId?: number;
+  color?: "red" | "gray";
+  resolution?: "page_matches" | "approved_as_is";
+  to?: string;
+  cc?: string | null;
 };
 
 const fieldLabels: Record<string, string> = {
@@ -40,6 +49,11 @@ function flagCount(n: number) {
 }
 
 function EventDetails({ action, details, ruleNames }: { action: string; details: Details; ruleNames: Map<string, string> }) {
+  const alert = details.alertId !== undefined && (
+    <Link href={`/alerts/${details.alertId}`} className="underline underline-offset-3">
+      alert #{details.alertId}
+    </Link>
+  );
   const check = details.checkId !== undefined && (
     <Link href={`/checks/${details.checkId}`} className="underline underline-offset-3">
       Check #{details.checkId}
@@ -81,6 +95,40 @@ function EventDetails({ action, details, ruleNames }: { action: string; details:
         <>
           v{details.version}
           {details.comment && `: “${details.comment}”`}
+        </>
+      );
+    case "page_scanned":
+      if (details.result === "failed") return <>Couldn&apos;t check: {details.failureReason}</>;
+      if (details.result === "matched") return <>✓ Matches v{details.matchedVersion}</>;
+      return (
+        <>
+          Changed · {details.matchedVersion ? `matches v${details.matchedVersion}` : "matches nothing approved"}
+        </>
+      );
+    case "alert_opened":
+    case "alert_updated":
+      return (
+        <>
+          {alertColorLabels[details.color ?? "gray"]} · {alert}
+        </>
+      );
+    case "alert_closed":
+      return (
+        <>
+          {details.resolution === "approved_as_is" ? "Approved as-is" : "The live page matches again"} · {alert}
+        </>
+      );
+    case "approved_as_is":
+      return (
+        <>
+          v{details.version}, from {alert}
+        </>
+      );
+    case "fix_requested":
+      return (
+        <>
+          Emailed {details.to}
+          {details.cc && `, cc ${details.cc}`} · {alert}
         </>
       );
     default:

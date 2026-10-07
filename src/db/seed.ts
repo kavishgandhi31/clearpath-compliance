@@ -112,7 +112,7 @@ export async function resetAndSeed(db: Db) {
 
 // What the /demo/<slug> template shows, in page order. A seeded "Matches" only holds on a real re-scan if this is
 // exactly the text extraction pulls from that page.
-function demoPageText(page: DemoPageFields) {
+export function demoPageText(page: DemoPageFields) {
   const visible = [page.headline, page.body];
   if (page.showDisclosure) visible.push(approvedText("affiliate_disclosure"));
   return { visibleText: visible.join("\n"), hiddenText: page.hiddenText };
@@ -268,7 +268,7 @@ async function replayAd(
     log(scan.hoursAgo, reviewer, "page_scanned", {
       scanId: row.id,
       result: matchesLastApproved ? "matched" : "changed",
-      matchedVersionNumber: matched?.number ?? null,
+      matchedVersion: matched?.number ?? null,
     });
     if (matchesLastApproved) continue;
 

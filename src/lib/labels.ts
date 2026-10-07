@@ -1,8 +1,9 @@
-import type { Channel, Product, Role, Source, versionCreatedViaEnum } from "@/db/schema";
+import type { alertColorEnum, Channel, Product, Role, Source, versionCreatedViaEnum } from "@/db/schema";
 import type { Flag } from "@/check/types";
 import type { AdStatus, Decision } from "./status";
 
 type VersionCreatedVia = (typeof versionCreatedViaEnum.enumValues)[number];
+type AlertColor = (typeof alertColorEnum.enumValues)[number];
 
 export const roleLabels: Record<Role, string> = {
   submitter: "Submitter",
@@ -40,6 +41,11 @@ export const decisionLabels: Record<Decision, string> = {
   rejected: "Rejected",
 };
 
+export const alertColorLabels: Record<AlertColor, string> = {
+  red: "Red",
+  gray: "Gray",
+};
+
 export const createdViaLabels: Record<VersionCreatedVia, string> = {
   submitted: "Submitted",
   approved_from_alert: "Approved from alert",
@@ -63,4 +69,10 @@ export const eventLabels: Record<string, string> = {
   approved: "Approved",
   changes_requested: "Requested changes",
   rejected: "Rejected",
+  page_scanned: "Scanned the live page",
+  alert_opened: "Opened an alert",
+  alert_updated: "Updated the alert",
+  alert_closed: "Closed the alert",
+  approved_as_is: "Approved the live page as-is",
+  fix_requested: "Requested a fix",
 };

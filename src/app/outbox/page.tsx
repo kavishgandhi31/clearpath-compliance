@@ -51,6 +51,7 @@ export default async function OutboxPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 To: {email.to}
+                {email.cc !== null && ` · Cc: ${email.cc}`}
                 {email.adId !== null && (
                   <>
                     {" · Ad: "}
