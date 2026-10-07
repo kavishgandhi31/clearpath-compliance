@@ -39,7 +39,7 @@ export async function rescan(adId: number): Promise<ActionResult> {
   if (!approved) return { error: "This ad has no approved version to compare the live page with." };
 
   const fetchedAt = new Date();
-  const fetched = await fetchContent({ kind: "url", url: approved.url ?? "" });
+  const fetched = await fetchContent({ kind: "web_page", url: approved.url ?? "" });
   let checked: CheckResult | null = null;
   if (fetched.ok && fetched.content.hash !== approved.hash) {
     // runCheck throws when an AI step can't answer. The scan isn't saved then, so a changed page never shows without its flags.

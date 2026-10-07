@@ -271,23 +271,23 @@ export default async function AdPage(props: PageProps<"/ads/[id]">) {
             <h2 className="font-medium">Version history</h2>
             <ol className="flex flex-col gap-2">
               {versionRows.map(({ version, createdByName }) => (
-                <li
-                  key={version.id}
-                  className={`rounded-lg border p-3 ${version.id === selected.version.id ? "border-foreground/40 bg-muted" : ""}`}
-                >
-                  <Link href={`/ads/${ad.id}?v=${version.number}`} className="font-medium hover:underline">
-                    Version {version.number}
-                  </Link>
-                  <p className="text-xs text-muted-foreground">
-                    {createdViaLabels[version.createdVia]} by {createdByName} · {formatAgo(version.createdAt)}
-                  </p>
-                  {decisionsOn(version.id).map(({ decision, reviewerName }) => (
-                    <p key={decision.id} className="mt-1 text-xs">
-                      <span className="font-medium">{decisionLabels[decision.decision]}</span> by {reviewerName}{" "}
-                      {formatAgo(decision.createdAt)}
-                      {decision.comment && <span className="block text-muted-foreground">“{decision.comment}”</span>}
+                <li key={version.id}>
+                  <Link
+                    href={`/ads/${ad.id}?v=${version.number}`}
+                    className={`block rounded-lg border p-3 hover:bg-muted ${version.id === selected.version.id ? "border-foreground/40 bg-muted" : ""}`}
+                  >
+                    <p className="font-medium">Version {version.number}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {createdViaLabels[version.createdVia]} by {createdByName} · {formatAgo(version.createdAt)}
                     </p>
-                  ))}
+                    {decisionsOn(version.id).map(({ decision, reviewerName }) => (
+                      <p key={decision.id} className="mt-1 text-xs">
+                        <span className="font-medium">{decisionLabels[decision.decision]}</span> by {reviewerName}{" "}
+                        {formatAgo(decision.createdAt)}
+                        {decision.comment && <span className="block text-muted-foreground">“{decision.comment}”</span>}
+                      </p>
+                    ))}
+                  </Link>
                 </li>
               ))}
             </ol>

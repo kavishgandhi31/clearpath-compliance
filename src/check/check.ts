@@ -23,8 +23,8 @@ function isTooLong(parts: Omit<ExtractedContent, "hash">): boolean {
 // Gets an ad's text: pasted text as-is, or a web page through safe fetch, split into visible and hidden text.
 // Demo pages (/demo/<slug>) are rendered in-process from the same template the route serves, with no network fetch.
 export async function fetchContent(content: DraftContent): Promise<FetchResult> {
-  if (content.kind === "text") {
-    const parts = { subject: content.subject, visibleText: content.text, hiddenText: "" };
+  if (content.kind !== "web_page") {
+    const parts = { subject: content.kind === "email" ? content.subject : null, visibleText: content.text, hiddenText: "" };
     if (isTooLong(parts)) return { ok: false, reason: "too much text in the ad (over 100,000 characters)" };
     return { ok: true, content: { ...parts, hash: hashContent(parts) } };
   }

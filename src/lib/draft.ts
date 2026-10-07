@@ -35,9 +35,15 @@ export function draftInputFrom(ad: AdRow): DraftInput {
 }
 
 export function toDraftContent(ad: Pick<AdRow, "channel" | "draftSubject" | "draftText" | "draftUrl">): DraftContent {
-  return ad.channel === "web_page"
-    ? { kind: "url", url: ad.draftUrl ?? "" }
-    : { kind: "text", subject: ad.draftSubject, text: ad.draftText ?? "" };
+  switch (ad.channel) {
+    case "email":
+      // parseDraft requires a subject on email drafts; the ?? only satisfies the nullable column type.
+      return { kind: "email", subject: ad.draftSubject ?? "", text: ad.draftText ?? "" };
+    case "social_post":
+      return { kind: "social_post", text: ad.draftText ?? "" };
+    case "web_page":
+      return { kind: "web_page", url: ad.draftUrl ?? "" };
+  }
 }
 
 function isOneOf<T extends string>(values: readonly T[], value: string): value is T {

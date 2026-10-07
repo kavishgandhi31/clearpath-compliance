@@ -127,9 +127,11 @@ export default async function EditAdPage(props: PageProps<"/ads/[id]/edit">) {
                     : `${flags.length} ${flags.length === 1 ? "flag" : "flags"}, ${withoutNote} still ${withoutNote === 1 ? "needs" : "need"} a fix or a note.`}
                 {withoutNote === 0 && !inReview && " Ready to submit."}
               </p>
-              <div className="text-sm">
-                <FlagList flags={flags} notes={notes} editableAdId={ad.id} />
-              </div>
+              {flags.length > 0 && (
+                <div className="text-sm">
+                  <FlagList flags={flags} notes={notes} editableAdId={ad.id} />
+                </div>
+              )}
               <div className="text-sm">
                 <Suggestions flags={flags} approvedTexts={suggestedTexts} />
               </div>
