@@ -1,10 +1,15 @@
+import { count, isNull } from "drizzle-orm";
 import Link from "next/link";
 import { ResetButton } from "@/components/reset-button";
 import { Button } from "@/components/ui/button";
+import { db } from "@/db";
+import { alerts } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 
 export async function TopBar() {
   const user = await getCurrentUser();
+  const [openAlerts] =
+    user?.role === "reviewer" ? await db.select({ n: count() }).from(alerts).where(isNull(alerts.closedAt)) : [];
 
   return (
     <header className="border-b">
@@ -20,9 +25,14 @@ export async function TopBar() {
                   My ads
                 </Link>
               ) : (
-                <Link href="/review" className="hover:text-foreground">
-                  Review queue
-                </Link>
+                <>
+                  <Link href="/review" className="hover:text-foreground">
+                    Review queue
+                  </Link>
+                  <Link href="/alerts" className="hover:text-foreground">
+                    Alerts ({openAlerts?.n ?? 0})
+                  </Link>
+                </>
               )}
               <Link href="/rules" className="hover:text-foreground">
                 Rules

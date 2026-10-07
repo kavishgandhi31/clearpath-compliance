@@ -178,6 +178,7 @@ export const events = pgTable("events", {
 export const outbox = pgTable("outbox", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   to: text().notNull(),
+  cc: text(),
   subject: text().notNull(),
   body: text().notNull(),
   adId: integer().references(() => ads.id),

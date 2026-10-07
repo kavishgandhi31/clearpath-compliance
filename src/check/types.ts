@@ -6,9 +6,11 @@ export type AdContext = {
   source: Source;
 };
 
+// One variant per channel, so an email always has a subject, a social post never does, and the kind matches the channel.
 export type DraftContent =
-  | { kind: "text"; subject: string | null; text: string }
-  | { kind: "url"; url: string };
+  | { kind: "email"; subject: string; text: string }
+  | { kind: "social_post"; text: string }
+  | { kind: "web_page"; url: string };
 
 export type ExtractedContent = {
   subject: string | null;

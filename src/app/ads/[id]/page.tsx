@@ -1,17 +1,18 @@
-import { diffWords } from "diff";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { AuditLog } from "@/components/audit-log";
 import { DecisionPanel } from "@/components/decision-panel";
-import { DiffView } from "@/components/diff-view";
 import { FlagList, issueCounts, SuspiciousBanner } from "@/components/flag-list";
 import { HighlightedText } from "@/components/highlighted-text";
+import { RescanButton } from "@/components/rescan-button";
 import { LiveVersion, StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
+import { WhatChanged } from "@/components/what-changed";
+import { DEMO_PAGE_PATH } from "@/check/demo-page";
 import { db } from "@/db";
-import { adVersions, ads, affiliates, checks, decisions, events, flagNotes, rules, users } from "@/db/schema";
+import { adVersions, ads, affiliates, checks, decisions, demoPages, events, flagNotes, rules, users } from "@/db/schema";
 import { loadAdSummaries } from "@/lib/ads";
 import { requireUser } from "@/lib/auth";
 import { numberFlags } from "@/lib/flags";
@@ -19,8 +20,10 @@ import { formatAgo } from "@/lib/format";
 import type { Mark } from "@/lib/highlight";
 import { parseId } from "@/lib/ids";
 import { channelLabels, createdViaLabels, decisionLabels, productLabels, sourceLabels } from "@/lib/labels";
+import { liveStatus, loadMonitoring } from "@/lib/monitoring";
 
-type Version = typeof adVersions.$inferSelect;
+// Re-scan runs the full check when the page changed. Same limit as the edit page's Run check and Submit.
+export const maxDuration = 180;
 
 function Section({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
@@ -40,35 +43,13 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function WhatChanged({ before, after }: { before: Version; after: Version }) {
-  // diffWords skips whitespace, so a whitespace-only edit has no added or removed part and is left out.
-  const fields = [
-    { label: "Subject line", parts: diffWords(before.subject ?? "", after.subject ?? "") },
-    { label: "URL", parts: diffWords(before.url ?? "", after.url ?? "") },
-    { label: "Text", parts: diffWords(before.visibleText, after.visibleText) },
-    { label: "Hidden text", parts: diffWords(before.hiddenText, after.hiddenText) },
-  ].filter((field) => field.parts.some((part) => part.added || part.removed));
-
-  if (fields.length === 0) return <p className="text-muted-foreground">The text is the same as v{before.number}.</p>;
-  return (
-    <div className="flex flex-col gap-3">
-      {fields.map((field) => (
-        <div key={field.label} className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground uppercase">{field.label}</span>
-          <DiffView parts={field.parts} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default async function AdPage(props: PageProps<"/ads/[id]">) {
   const user = await requireUser();
   const adId = parseId((await props.params).id);
   const [ad] = adId === null ? [] : await loadAdSummaries(eq(ads.id, adId));
   if (!ad) notFound();
 
-  const [affiliateRows, versionRows, decisionRows, notes, eventRows, ruleRows] = await Promise.all([
+  const [affiliateRows, versionRows, decisionRows, notes, eventRows, ruleRows, monitoring] = await Promise.all([
     ad.affiliateId === null
       ? []
       : db.select({ name: affiliates.name }).from(affiliates).where(eq(affiliates.id, ad.affiliateId)),
@@ -99,19 +80,31 @@ export default async function AdPage(props: PageProps<"/ads/[id]">) {
       .where(eq(events.adId, ad.id))
       .orderBy(asc(events.id)),
     db.select({ id: rules.id, name: rules.name }).from(rules),
+    loadMonitoring([ad]),
   ]);
+  const live = liveStatus(ad, monitoring.get(ad.id));
+  const openAlert = monitoring.get(ad.id)?.openAlert ?? null;
 
   const requested = Number((await props.searchParams).v);
   const selected = versionRows.find(({ version }) => version.number === requested) ?? versionRows[0];
   const previous = selected && versionRows.find(({ version }) => version.number === selected.version.number - 1);
-  const [check] = selected
-    ? await db
-        .select()
-        .from(checks)
-        .where(and(eq(checks.versionId, selected.version.id), isNull(checks.pageScanId)))
-        .orderBy(desc(checks.id))
-        .limit(1)
-    : [];
+  const demoSlug = selected?.version.url ? DEMO_PAGE_PATH.exec(selected.version.url)?.[1] : undefined;
+  const [[check], [demoPage]] = await Promise.all([
+    // A version approved from an alert has no check of its own: it's the live text that was checked on that scan.
+    selected
+      ? db
+          .select()
+          .from(checks)
+          .where(
+            selected.version.createdVia === "submitted"
+              ? and(eq(checks.versionId, selected.version.id), isNull(checks.pageScanId))
+              : and(eq(checks.adId, ad.id), eq(checks.contentHash, selected.version.hash), isNotNull(checks.pageScanId)),
+          )
+          .orderBy(desc(checks.id))
+          .limit(1)
+      : [],
+    demoSlug ? db.select({ slug: demoPages.slug }).from(demoPages).where(eq(demoPages.slug, demoSlug)) : [],
+  ]);
   const flags = check ? numberFlags(check.flags, check.rulesUsed) : [];
   const marks: Mark[] = flags.flatMap(({ flag, n }) => (flag.quote ? [{ quote: flag.quote, n }] : []));
 
@@ -142,9 +135,13 @@ export default async function AdPage(props: PageProps<"/ads/[id]">) {
             {ad.lastApprovedVersion ? `v${ad.lastApprovedVersion.number}` : "None yet"}
           </Detail>
           <Detail label="Live version">
-            <LiveVersion channel={ad.channel} />
+            <LiveVersion live={live} />
           </Detail>
-          <div className="hidden sm:block" />
+          <div>
+            {user.role === "reviewer" && ad.channel === "web_page" && ad.lastApprovedVersion && (
+              <RescanButton adId={ad.id} />
+            )}
+          </div>
           <Detail label="Product">{productLabels[ad.product]}</Detail>
           <Detail label="Channel">{channelLabels[ad.channel]}</Detail>
           <Detail label="Made by">
@@ -152,6 +149,16 @@ export default async function AdPage(props: PageProps<"/ads/[id]">) {
           </Detail>
           <Detail label="Submitted by">{ad.ownerName}</Detail>
         </dl>
+        {openAlert && ad.lastApprovedVersion && (
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm ${openAlert.color === "red" ? "border-red-300 bg-red-50 text-red-950" : "bg-muted"}`}
+          >
+            ⚠ Open alert: the live page doesn&apos;t match v{ad.lastApprovedVersion.number}.{" "}
+            <Link href={`/alerts/${openAlert.id}`} className="font-medium underline underline-offset-3">
+              View alert
+            </Link>
+          </div>
+        )}
       </header>
 
       {!selected ? (
@@ -216,6 +223,11 @@ export default async function AdPage(props: PageProps<"/ads/[id]">) {
                     >
                       {selected.version.url}
                     </a>
+                    {demoPage && (
+                      <Link href={`${selected.version.url}/edit`} className="text-xs underline underline-offset-3">
+                        Edit demo page
+                      </Link>
+                    )}
                   </div>
                 )}
                 <div className="flex flex-col gap-1">
@@ -265,23 +277,23 @@ export default async function AdPage(props: PageProps<"/ads/[id]">) {
             <h2 className="font-medium">Version history</h2>
             <ol className="flex flex-col gap-2">
               {versionRows.map(({ version, createdByName }) => (
-                <li
-                  key={version.id}
-                  className={`rounded-lg border p-3 ${version.id === selected.version.id ? "border-foreground/40 bg-muted" : ""}`}
-                >
-                  <Link href={`/ads/${ad.id}?v=${version.number}`} className="font-medium hover:underline">
-                    Version {version.number}
-                  </Link>
-                  <p className="text-xs text-muted-foreground">
-                    {createdViaLabels[version.createdVia]} by {createdByName} · {formatAgo(version.createdAt)}
-                  </p>
-                  {decisionsOn(version.id).map(({ decision, reviewerName }) => (
-                    <p key={decision.id} className="mt-1 text-xs">
-                      <span className="font-medium">{decisionLabels[decision.decision]}</span> by {reviewerName}{" "}
-                      {formatAgo(decision.createdAt)}
-                      {decision.comment && <span className="block text-muted-foreground">“{decision.comment}”</span>}
+                <li key={version.id}>
+                  <Link
+                    href={`/ads/${ad.id}?v=${version.number}`}
+                    className={`block rounded-lg border p-3 hover:bg-muted ${version.id === selected.version.id ? "border-foreground/40 bg-muted" : ""}`}
+                  >
+                    <p className="font-medium">Version {version.number}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {createdViaLabels[version.createdVia]} by {createdByName} · {formatAgo(version.createdAt)}
                     </p>
-                  ))}
+                    {decisionsOn(version.id).map(({ decision, reviewerName }) => (
+                      <p key={decision.id} className="mt-1 text-xs">
+                        <span className="font-medium">{decisionLabels[decision.decision]}</span> by {reviewerName}{" "}
+                        {formatAgo(decision.createdAt)}
+                        {decision.comment && <span className="block text-muted-foreground">“{decision.comment}”</span>}
+                      </p>
+                    ))}
+                  </Link>
                 </li>
               ))}
             </ol>

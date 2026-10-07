@@ -38,7 +38,11 @@ function costOf(usage: ModelUsage[]): number {
 async function runOne(ad: EvalAd, effort: Effort): Promise<Outcome> {
   const fetched =
     ad.content.kind === "text"
-      ? await fetchContent({ kind: "text", subject: ad.content.subject, text: ad.content.text })
+      ? await fetchContent(
+          ad.ad.channel === "email"
+            ? { kind: "email", subject: ad.content.subject ?? "", text: ad.content.text }
+            : { kind: "social_post", text: ad.content.text },
+        )
       : contentFromHtml(ad.content.html);
   if (!fetched.ok) return { ad, ok: false, error: fetched.reason };
 
