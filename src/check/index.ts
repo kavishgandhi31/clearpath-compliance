@@ -1,1 +1,1 @@
-export { fetchContent, runCheck } from "./placeholder-check";
+export { fetchContent, runCheck } from "./check";
