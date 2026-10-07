@@ -14,13 +14,15 @@ const PRICES: [prefix: string, input: number, output: number][] = [
   ["claude-haiku-4-5", 1, 5],
 ];
 
+const STEP_NAMES = { phrase_search: "phrase search", injection_guard: "Haiku guard" };
+
 type Outcome =
   | { ad: EvalAd; ok: false; error: string }
   | {
       ad: EvalAd;
       ok: true;
       flaggedRuleIds: Set<string>;
-      injectionFound: boolean;
+      injectionCaughtBy: string[];
       seconds: number;
       cost: number;
       dropped: DroppedFlag[];
@@ -47,7 +49,9 @@ async function runOne(ad: EvalAd, effort: Effort): Promise<Outcome> {
       ad,
       ok: true,
       flaggedRuleIds: new Set(result.flags.flatMap((flag) => (flag.kind === "rule" ? [flag.ruleId] : []))),
-      injectionFound: result.flags.some((flag) => flag.kind === "suspicious_instructions"),
+      injectionCaughtBy: [
+        ...new Set(result.flags.flatMap((flag) => (flag.kind === "suspicious_instructions" ? [STEP_NAMES[flag.foundBy]] : []))),
+      ],
       seconds: (performance.now() - started) / 1000,
       cost: costOf(usage),
       dropped,
@@ -77,17 +81,21 @@ async function main() {
   const done = outcomes.filter((outcome) => outcome.ok);
 
   console.log(`## Eval: ${evalAds.length} ads, Sonnet effort ${effort}\n`);
-  console.log("| Ad | Expected | Flagged | Injection expected / found | Time | Cost |");
-  console.log("|---|---|---|---|---|---|");
+  console.log("| Ad | Expected | Flagged | Injection expected / found | Injection caught by | Time | Cost |");
+  console.log("|---|---|---|---|---|---|---|");
   for (const outcome of outcomes) {
     const expected = list(outcome.ad.expectedRuleIds);
     if (!outcome.ok) {
-      console.log(`| ${outcome.ad.id} | ${expected} | check failed: ${outcome.error} | ${outcome.ad.expectInjection ? "yes" : "no"} / — | — | — |`);
+      console.log(
+        `| ${outcome.ad.id} | ${expected} | check failed: ${outcome.error} | ${outcome.ad.expectInjection ? "yes" : "no"} / — | — | — | — |`,
+      );
       continue;
     }
-    const injection = `${outcome.ad.expectInjection ? "yes" : "no"} / ${outcome.injectionFound ? "yes" : "no"}`;
+    const found = outcome.injectionCaughtBy.length > 0;
+    const injection = `${outcome.ad.expectInjection ? "yes" : "no"} / ${found ? "yes" : "no"}`;
+    const caughtBy = outcome.injectionCaughtBy.join(", ") || "—";
     console.log(
-      `| ${outcome.ad.id} | ${expected} | ${list(outcome.flaggedRuleIds)} | ${injection} | ${outcome.seconds.toFixed(1)}s | $${outcome.cost.toFixed(4)} |`,
+      `| ${outcome.ad.id} | ${expected} | ${list(outcome.flaggedRuleIds)} | ${injection} | ${caughtBy} | ${outcome.seconds.toFixed(1)}s | $${outcome.cost.toFixed(4)} |`,
     );
   }
 
@@ -110,9 +118,11 @@ async function main() {
   }
 
   const attempts = done.filter((outcome) => outcome.ad.expectInjection);
-  const injectionFalseAlarms = done.filter((outcome) => !outcome.ad.expectInjection && outcome.injectionFound).length;
+  const injectionFalseAlarms = done.filter(
+    (outcome) => !outcome.ad.expectInjection && outcome.injectionCaughtBy.length > 0,
+  ).length;
   console.log(
-    `\nInjection attempts caught: ${attempts.filter((outcome) => outcome.injectionFound).length}/${attempts.length}` +
+    `\nInjection attempts caught: ${attempts.filter((outcome) => outcome.injectionCaughtBy.length > 0).length}/${attempts.length}` +
       ` (Suspicious instructions on other ads: ${injectionFalseAlarms})`,
   );
   if (done.length) {
