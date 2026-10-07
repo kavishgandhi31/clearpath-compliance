@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { WhatChanged } from "@/components/what-changed";
 import { DEMO_PAGE_PATH } from "@/check/demo-page";
 import { db } from "@/db";
-import { adVersions, ads, affiliates, checks, decisions, events, flagNotes, rules, users } from "@/db/schema";
+import { adVersions, ads, affiliates, checks, decisions, demoPages, events, flagNotes, rules, users } from "@/db/schema";
 import { loadAdSummaries } from "@/lib/ads";
 import { requireUser } from "@/lib/auth";
 import { numberFlags } from "@/lib/flags";
@@ -88,19 +88,23 @@ export default async function AdPage(props: PageProps<"/ads/[id]">) {
   const requested = Number((await props.searchParams).v);
   const selected = versionRows.find(({ version }) => version.number === requested) ?? versionRows[0];
   const previous = selected && versionRows.find(({ version }) => version.number === selected.version.number - 1);
-  // A version approved from an alert has no check of its own: it's the live text that was checked on that scan.
-  const [check] = selected
-    ? await db
-        .select()
-        .from(checks)
-        .where(
-          selected.version.createdVia === "submitted"
-            ? and(eq(checks.versionId, selected.version.id), isNull(checks.pageScanId))
-            : and(eq(checks.adId, ad.id), eq(checks.contentHash, selected.version.hash), isNotNull(checks.pageScanId)),
-        )
-        .orderBy(desc(checks.id))
-        .limit(1)
-    : [];
+  const demoSlug = selected?.version.url ? DEMO_PAGE_PATH.exec(selected.version.url)?.[1] : undefined;
+  const [[check], [demoPage]] = await Promise.all([
+    // A version approved from an alert has no check of its own: it's the live text that was checked on that scan.
+    selected
+      ? db
+          .select()
+          .from(checks)
+          .where(
+            selected.version.createdVia === "submitted"
+              ? and(eq(checks.versionId, selected.version.id), isNull(checks.pageScanId))
+              : and(eq(checks.adId, ad.id), eq(checks.contentHash, selected.version.hash), isNotNull(checks.pageScanId)),
+          )
+          .orderBy(desc(checks.id))
+          .limit(1)
+      : [],
+    demoSlug ? db.select({ slug: demoPages.slug }).from(demoPages).where(eq(demoPages.slug, demoSlug)) : [],
+  ]);
   const flags = check ? numberFlags(check.flags, check.rulesUsed) : [];
   const marks: Mark[] = flags.flatMap(({ flag, n }) => (flag.quote ? [{ quote: flag.quote, n }] : []));
 
@@ -146,7 +150,9 @@ export default async function AdPage(props: PageProps<"/ads/[id]">) {
           <Detail label="Submitted by">{ad.ownerName}</Detail>
         </dl>
         {openAlert && ad.lastApprovedVersion && (
-          <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-950">
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm ${openAlert.color === "red" ? "border-red-300 bg-red-50 text-red-950" : "bg-muted"}`}
+          >
             ⚠ Open alert: the live page doesn&apos;t match v{ad.lastApprovedVersion.number}.{" "}
             <Link href={`/alerts/${openAlert.id}`} className="font-medium underline underline-offset-3">
               View alert
@@ -217,7 +223,7 @@ export default async function AdPage(props: PageProps<"/ads/[id]">) {
                     >
                       {selected.version.url}
                     </a>
-                    {DEMO_PAGE_PATH.test(selected.version.url) && (
+                    {demoPage && (
                       <Link href={`${selected.version.url}/edit`} className="text-xs underline underline-offset-3">
                         Edit demo page
                       </Link>

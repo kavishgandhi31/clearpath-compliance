@@ -5,10 +5,13 @@ import { ads, outbox } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
 
+// Seeded emails link with a path like /ads/3/edit, since the seed doesn't know the site's address.
+const LINK = /(https?:\/\/\S+|(?<!\S)\/(?:ads|alerts|checks|demo)\/\S+)/;
+
 function Linkified({ text }: { text: string }) {
   return (
     <p className="whitespace-pre-wrap break-words">
-      {text.split(/(https?:\/\/\S+)/).map((part, i) =>
+      {text.split(LINK).map((part, i) =>
         i % 2 === 1 ? (
           <a key={i} href={part} className="underline underline-offset-3">
             {part}

@@ -41,6 +41,10 @@ export const decisionLabels: Record<Decision, string> = {
   rejected: "Rejected",
 };
 
+// Shown on the disabled Approve as-is button and returned by approveAsIs.
+export const suspiciousApproveMessage =
+  "Can't approve as-is while the live text has suspicious instructions. Request a fix instead.";
+
 export const alertColorLabels: Record<AlertColor, string> = {
   red: "Red",
   gray: "Gray",

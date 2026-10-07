@@ -25,10 +25,14 @@ const seededPages = [
   ),
 ];
 
-test("every seeded demo page renders to the hash of its seeded version", () => {
+test("every seeded demo page extracts to exactly its seeded version's text and hash", () => {
   assert.ok(seededPages.length >= 5);
   for (const { name, page } of seededPages) {
-    assert.equal(extract(page).hash, hashContent({ subject: null, ...demoPageText(page) }), name);
+    const seeded = demoPageText(page);
+    const content = extract(page);
+    assert.equal(content.visibleText, seeded.visibleText, name);
+    assert.equal(content.hiddenText, seeded.hiddenText, name);
+    assert.equal(content.hash, hashContent({ subject: null, ...seeded }), name);
   }
 });
 
@@ -44,5 +48,6 @@ test("typed text is shown as text, and hidden text is extracted exactly once", (
   const content = extract(page);
   assert.equal(content.visibleText, "Rates <b>today</b>\nFirst line & more.\nSame paragraph.\n<script>alert(1)</script>");
   assert.equal(content.hiddenText, page.hiddenText);
+  assert.deepEqual({ visibleText: content.visibleText, hiddenText: content.hiddenText }, demoPageText(page));
   assert.equal(content.hash, hashContent({ subject: null, ...demoPageText(page) }));
 });

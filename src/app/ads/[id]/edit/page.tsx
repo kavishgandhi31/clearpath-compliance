@@ -101,12 +101,15 @@ export default async function EditAdPage(props: PageProps<"/ads/[id]/edit">) {
         </section>
 
         <section className="flex flex-col gap-4">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="font-medium">Check results</h2>
+          <div>
+            <h2 className="font-medium">Latest check</h2>
             {latestCheck && (
-              <Link href={`/checks/${latestCheck.id}`} className="text-xs text-muted-foreground underline underline-offset-3">
-                Check #{latestCheck.id} · {formatAgo(latestCheck.createdAt)}
-              </Link>
+              <p className="text-sm text-muted-foreground">
+                Ran {formatAgo(latestCheck.createdAt)} ·{" "}
+                <Link href={`/checks/${latestCheck.id}`} className="underline underline-offset-3">
+                  Check #{latestCheck.id}
+                </Link>
+              </p>
             )}
           </div>
           {!latestCheck ? (
@@ -125,7 +128,7 @@ export default async function EditAdPage(props: PageProps<"/ads/[id]/edit">) {
                   : withoutNote === 0
                     ? `${flags.length} ${flags.length === 1 ? "flag" : "flags"}, all with notes.`
                     : `${flags.length} ${flags.length === 1 ? "flag" : "flags"}, ${withoutNote} still ${withoutNote === 1 ? "needs" : "need"} a fix or a note.`}
-                {withoutNote === 0 && !inReview && " Ready to submit."}
+                {withoutNote === 0 && !inReview && !checkIsStale && " Ready to submit."}
               </p>
               {flags.length > 0 && (
                 <div className="text-sm">

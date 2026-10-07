@@ -37,7 +37,7 @@ export default async function AlertPage(props: PageProps<"/alerts/[id]">) {
   const [alert] = alertId === null ? [] : await db.select().from(alerts).where(eq(alerts.id, alertId));
   if (!alert) notFound();
 
-  const [[ad], [scan], [approved], [check], notes, scanRows, alertEvents] = await Promise.all([
+  const [[ad], [scan], approvedVersions, [check], notes, scanRows, alertEvents] = await Promise.all([
     loadAdSummaries(eq(ads.id, alert.adId)),
     db.select().from(pageScans).where(eq(pageScans.id, alert.latestScanId)),
     loadApprovedVersions(db, alert.adId),
@@ -68,6 +68,12 @@ export default async function AlertPage(props: PageProps<"/alerts/[id]">) {
   // The scan that closed it: the first one after the alert's latest scan that matched with no check.
   const closingScan = scanRows.findLast((row) => row.id > alert.latestScanId && row.matchedVersion !== null && row.checkId === null);
   const matchedVersion = scanRows.find((row) => row.id === scan.id)?.matchedVersion ?? null;
+  // A closed alert keeps showing the change it was opened for, not a comparison with a later approval of the same text.
+  const approved = !alert.closedAt
+    ? approvedVersions[0]
+    : alert.resolution === "approved_as_is"
+      ? approvedVersions.find((version) => version.number < Number(approvedAsIs?.details.version))!
+      : approvedVersions.find((version) => version.number === closingScan?.matchedVersion)!;
 
   const flags = check ? numberFlags(check.flags, check.rulesUsed) : [];
   const marks: Mark[] = flags.flatMap(({ flag, n }) => (flag.quote ? [{ quote: flag.quote, n }] : []));
@@ -105,7 +111,13 @@ export default async function AlertPage(props: PageProps<"/alerts/[id]">) {
           </div>
         )}
         {!alert.closedAt && user.role === "reviewer" && (
-          <AlertActions alertId={alert.id} adId={ad.id} scanId={scan.id} flagCount={flags.length} />
+          <AlertActions
+            alertId={alert.id}
+            adId={ad.id}
+            scanId={scan.id}
+            flagCount={flags.length}
+            suspicious={flags.some(({ flag }) => flag.kind === "suspicious_instructions")}
+          />
         )}
         {!alert.closedAt && lastFix && (
           <p className="text-muted-foreground">
@@ -117,7 +129,9 @@ export default async function AlertPage(props: PageProps<"/alerts/[id]">) {
         )}
       </header>
 
-      <Section title={`What changed since v${approved.number} (last approved)`}>
+      <Section
+        title={`What changed since v${approved.number} (${alert.closedAt ? "last approved at the time" : "last approved"})`}
+      >
         <WhatChanged before={approved} after={live} />
       </Section>
 

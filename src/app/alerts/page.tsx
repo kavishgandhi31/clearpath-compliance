@@ -77,7 +77,7 @@ export default async function AlertsPage() {
                   </TableCell>
                   <TableCell>{formatAgo(alert.openedAt)}</TableCell>
                   <TableCell>{lastScannedAt ? formatAgo(lastScannedAt) : "Never"}</TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-normal">
                     <RescanButton adId={alert.adId} />
                   </TableCell>
                 </TableRow>

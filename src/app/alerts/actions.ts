@@ -12,6 +12,7 @@ import { loadStatus } from "@/lib/ads";
 import { requireUser } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
 import { parseId } from "@/lib/ids";
+import { suspiciousApproveMessage } from "@/lib/labels";
 import { loadApprovedVersions } from "@/lib/monitoring";
 
 export type ActionResult = { error?: string };
@@ -41,14 +42,29 @@ export async function rescan(adId: number): Promise<ActionResult> {
   const fetchedAt = new Date();
   const fetched = await fetchContent({ kind: "web_page", url: approved.url ?? "" });
   let checked: CheckResult | null = null;
+  let reusedCheckId: number | null = null;
   if (fetched.ok && fetched.content.hash !== approved.hash) {
-    // runCheck throws when an AI step can't answer. The scan isn't saved then, so a changed page never shows without its flags.
-    try {
-      checked = await runCheck({ product: ad.product, channel: ad.channel, source: ad.source }, fetched.content);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      await db.insert(events).values({ adId: ad.id, actorId: user.id, action: "check_failed", details: { reason } });
-      return { error: `The page changed, but the check couldn't finish: ${reason} Try Re-scan again.` };
+    // The open alert already has a check of this exact text, so re-scanning an unchanged page costs no AI call.
+    const [previous] = await db
+      .select({ check: checks })
+      .from(alerts)
+      .innerJoin(pageScans, eq(pageScans.id, alerts.latestScanId))
+      .innerJoin(checks, eq(checks.pageScanId, pageScans.id))
+      .where(and(eq(alerts.adId, ad.id), isNull(alerts.closedAt), eq(pageScans.hash, fetched.content.hash)))
+      .orderBy(desc(checks.id))
+      .limit(1);
+    if (previous) {
+      checked = { flags: previous.check.flags, rulesUsed: previous.check.rulesUsed, model: previous.check.model };
+      reusedCheckId = previous.check.id;
+    } else {
+      // runCheck throws when an AI step can't answer. The scan isn't saved then, so a changed page never shows without its flags.
+      try {
+        checked = await runCheck({ product: ad.product, channel: ad.channel, source: ad.source }, fetched.content);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        await db.insert(events).values({ adId: ad.id, actorId: user.id, action: "check_failed", details: { reason } });
+        return { error: `The page changed, but the check couldn't finish: ${reason} Try Re-scan again.` };
+      }
     }
   }
 
@@ -91,6 +107,7 @@ export async function rescan(adId: number): Promise<ActionResult> {
       scanId: scan.id,
       result: checked ? "changed" : "matched",
       matchedVersion: matched?.number ?? null,
+      ...(reusedCheckId !== null && { reusedCheckId }),
     });
 
     const [openAlert] = await tx
@@ -157,6 +174,14 @@ export async function approveAsIs(alertId: number, scanId: number): Promise<Acti
             .from(pageScans)
             .where(and(eq(pageScans.id, id), eq(pageScans.adId, adId), isNotNull(pageScans.hash)));
     if (!scan) throw new Error("Unknown scan.");
+    const [check] = await tx
+      .select({ flags: checks.flags })
+      .from(checks)
+      .where(eq(checks.pageScanId, scan.id))
+      .orderBy(desc(checks.id))
+      .limit(1);
+    // Same rule as Submit: suspicious instructions can't be waved through.
+    if (check?.flags.some((flag) => flag.kind === "suspicious_instructions")) return suspiciousApproveMessage;
     const [approved] = await loadApprovedVersions(tx, adId);
 
     const number = latestVersion.number + 1;

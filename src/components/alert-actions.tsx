@@ -4,10 +4,11 @@ import { useState, useTransition } from "react";
 import { approveAsIs, requestFix } from "@/app/alerts/actions";
 import { RescanButton } from "@/components/rescan-button";
 import { Button } from "@/components/ui/button";
+import { suspiciousApproveMessage } from "@/lib/labels";
 
-type Props = { alertId: number; adId: number; scanId: number; flagCount: number };
+type Props = { alertId: number; adId: number; scanId: number; flagCount: number; suspicious: boolean };
 
-export function AlertActions({ alertId, adId, scanId, flagCount }: Props) {
+export function AlertActions({ alertId, adId, scanId, flagCount, suspicious }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -25,7 +26,7 @@ export function AlertActions({ alertId, adId, scanId, flagCount }: Props) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-start gap-2">
-        <Button type="button" size="sm" onClick={approve} disabled={pending}>
+        <Button type="button" size="sm" onClick={approve} disabled={pending || suspicious}>
           Approve as-is
         </Button>
         <Button type="button" size="sm" variant="outline" onClick={fix} disabled={pending}>
@@ -33,6 +34,7 @@ export function AlertActions({ alertId, adId, scanId, flagCount }: Props) {
         </Button>
         <RescanButton adId={adId} />
       </div>
+      {suspicious && <p className="text-sm text-muted-foreground">{suspiciousApproveMessage}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );

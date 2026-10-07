@@ -1,5 +1,5 @@
 import { diffWords } from "diff";
-import { DiffView } from "@/components/diff-view";
+import { DiffView, isShortened } from "@/components/diff-view";
 
 type Text = { subject: string | null; url: string | null; visibleText: string; hiddenText: string };
 
@@ -15,10 +15,15 @@ export function WhatChanged({ before, after }: { before: Text & { number: number
   if (fields.length === 0) return <p className="text-muted-foreground">The text is the same as v{before.number}.</p>;
   return (
     <div className="flex flex-col gap-3">
+      <p className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <span className="rounded-sm bg-emerald-100 px-1 text-emerald-900">Added</span>
+        <span className="rounded-sm bg-red-100 px-1 text-red-900 line-through">Removed</span>
+        {fields.some((field) => isShortened(field.parts)) && <span>… unchanged text left out</span>}
+      </p>
       {fields.map((field) => (
         <div key={field.label} className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground uppercase">{field.label}</span>
-          <DiffView parts={field.parts} />
+          <DiffView parts={field.parts} since={before.number} />
         </div>
       ))}
     </div>

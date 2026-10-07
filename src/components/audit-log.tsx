@@ -25,6 +25,7 @@ type Details = {
   scanId?: number;
   result?: "matched" | "changed" | "failed";
   matchedVersion?: number | null;
+  reusedCheckId?: number;
   failureReason?: string;
   alertId?: number;
   color?: "red" | "gray";
@@ -103,6 +104,15 @@ function EventDetails({ action, details, ruleNames }: { action: string; details:
       return (
         <>
           Changed · {details.matchedVersion ? `matches v${details.matchedVersion}` : "matches nothing approved"}
+          {details.reusedCheckId !== undefined && (
+            <>
+              {" · same text as "}
+              <Link href={`/checks/${details.reusedCheckId}`} className="underline underline-offset-3">
+                Check #{details.reusedCheckId}
+              </Link>
+              , not re-checked
+            </>
+          )}
         </>
       );
     case "alert_opened":
