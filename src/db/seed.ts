@@ -110,12 +110,13 @@ export async function resetAndSeed(db: Db) {
   });
 }
 
-// What the /demo/<slug> template shows, in page order. A seeded "Matches" only holds on a real re-scan if this is
-// exactly the text extraction pulls from that page.
-function demoPageText(page: DemoPageFields) {
-  const visible = [page.headline, page.body];
-  if (page.showDisclosure) visible.push(approvedText("affiliate_disclosure"));
-  return { visibleText: visible.join("\n"), hiddenText: page.hiddenText };
+// Exactly the text extraction pulls from the /demo/<slug> template: the headline, each line of the body with blank lines
+// dropped, then the affiliate disclosure when it's on, and the hidden text on one line. A seeded "Matches" only holds on a
+// real re-scan if this is right, and seeded versions then read like scanned text.
+export function demoPageText(page: DemoPageFields) {
+  const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
+  const lines = [page.headline, ...page.body.split(/\r\n?|\n/), page.showDisclosure ? approvedText("affiliate_disclosure") : ""];
+  return { visibleText: lines.map(oneLine).filter(Boolean).join("\n"), hiddenText: oneLine(page.hiddenText) };
 }
 
 function extract(content: SeedContent): ExtractedContent {
@@ -268,7 +269,7 @@ async function replayAd(
     log(scan.hoursAgo, reviewer, "page_scanned", {
       scanId: row.id,
       result: matchesLastApproved ? "matched" : "changed",
-      matchedVersionNumber: matched?.number ?? null,
+      matchedVersion: matched?.number ?? null,
     });
     if (matchesLastApproved) continue;
 
